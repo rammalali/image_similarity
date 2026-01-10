@@ -1,10 +1,14 @@
 faiss_cpu
+fastapi
 gdown
 loguru
 numpy
 Pillow
+pydantic
 scikit_learn
 scipy
 torch
 torchvision
 tqdm
+uvicorn
+python-multipart

@@ -1,0 +1,22 @@
+{
+  "name": "vpr-evaluation-frontend",
+  "version": "1.0.0",
+  "description": "Frontend UI for VPR Evaluation Tool",
+  "main": "index.js",
+  "scripts": {
+    "dev": "http-server . -p 8080 -c-1",
+    "serve": "http-server . -p 8080 -c-1"
+  },
+  "keywords": [
+    "vpr",
+    "visual-place-recognition",
+    "frontend"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^0.12.3"
+  },
+  "dependencies": {}
+}
+

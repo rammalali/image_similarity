@@ -195,10 +195,11 @@ def save_file_with_paths(query_path, preds_paths, output_path):
         file.write("\n".join(file_content))
 
 
-def save_preds(predictions, eval_ds, output_dir, distances=None, distance_threshold=None):
+def save_preds(predictions, eval_ds, output_dir, distances=None, distance_threshold=None,
+                use_lightglue_only=False, lightglue_match_threshold=10):
     """For each query, save an image containing the query and its top predictions,
     and a file with the paths of the query and its predictions.
-    Predictions are marked as positive (green) or negative (red) based on LightGlue matches and distance confidence.
+    Predictions are marked as positive (green) or negative (red) based on LightGlue matches and/or distance confidence.
 
     Parameters
     ----------
@@ -210,6 +211,11 @@ def save_preds(predictions, eval_ds, output_dir, distances=None, distance_thresh
         Lower distance = higher confidence (more similar)
     distance_threshold : float, optional
         Distance threshold for determining positive predictions. If None, uses adaptive threshold.
+    use_lightglue_only : bool, default False
+        If True, use only LightGlue matches to determine positive/negative (ignores distance threshold).
+        If False, use LightGlue first, then distance threshold.
+    lightglue_match_threshold : int, default 10
+        Minimum number of LightGlue matches required for positive prediction (when use_lightglue_only=True).
     """
     viz_dir = output_dir / "preds"
     viz_dir.mkdir(parents=True, exist_ok=True)
@@ -265,25 +271,35 @@ def save_preds(predictions, eval_ds, output_dir, distances=None, distance_thresh
                     total_processing_time += processing_time
                     num_matches = len(matches_result["matches"])
                     print(f"Query {query_index}, Pred {pred_idx}: {processing_time:.3f}s, matches: {num_matches}")
-                    if num_matches < 10:
-                        # Less than 10 matches = negative (red)
-                        is_positive = False
+                    
+                    if use_lightglue_only:
+                        # LightGlue-only mode: use match threshold directly
+                        is_positive = num_matches >= lightglue_match_threshold
+                    else:
+                        # Normal mode: LightGlue is first filter
+                        if num_matches < 10:
+                            # Less than 10 matches = negative (red)
+                            is_positive = False
                 except Exception as e:
-                    # If LightGlue check fails, continue with distance check
+                    # If LightGlue check fails
                     num_matches = None
                     print(f"Query {query_index}, Pred {pred_idx}: LightGlue check failed - {e}")
+                    if use_lightglue_only:
+                        # In LightGlue-only mode, if check fails, mark as negative
+                        is_positive = False
             
-            # Second check: Distance threshold (only if LightGlue didn't mark it as negative)
-            if is_positive and query_distances is not None and distance_threshold is not None:
-                dist = query_distances[pred_idx]
-                # Lower distance = higher confidence = positive (green)
-                # Higher distance = lower confidence = negative (red)
-                is_positive = dist < distance_threshold
-            
-            # Fallback: if no distance info, use heuristic
-            if is_positive and query_distances is None:
-                num_positive = min(5, len(preds))
-                is_positive = pred_idx < num_positive
+            # Second check: Distance threshold (only if not using LightGlue-only mode and LightGlue didn't mark it as negative)
+            if not use_lightglue_only:
+                if is_positive and query_distances is not None and distance_threshold is not None:
+                    dist = query_distances[pred_idx]
+                    # Lower distance = higher confidence = positive (green)
+                    # Higher distance = lower confidence = negative (red)
+                    is_positive = dist < distance_threshold
+                
+                # Fallback: if no distance info, use heuristic
+                if is_positive and query_distances is None:
+                    num_positive = min(5, len(preds))
+                    is_positive = pred_idx < num_positive
             
             preds_correct.append(is_positive)
             num_matches_list.append(num_matches)
