@@ -1,10 +1,10 @@
 // API endpoint URL - automatically detect based on current host
 const getApiUrl = () => {
-    // If running in browser, use same host with port 8000
+    // If running in browser, use same host with port 8040
     const host = window.location.hostname;
     const protocol = window.location.protocol;
-    // Use port 8000 for backend
-    return `${protocol}//${host}:8000/evaluate`;
+    // Use port 8040 for backend
+    return `${protocol}//${host}:8040/evaluate`;
 };
 const API_URL = getApiUrl();
 
@@ -108,65 +108,12 @@ function addFiles(files, type) {
 
 // Display file in list
 function displayFile(file, fileList, fileArray) {
-    // Create header if it doesn't exist
-    let header = fileList.querySelector('.file-list-header');
-    if (!header) {
-        header = document.createElement('div');
-        header.className = 'file-list-header';
-        
-        const countSpan = document.createElement('span');
-        countSpan.className = 'file-list-count';
-        countSpan.id = fileList.id + '-count';
-        
-        const clearButton = document.createElement('button');
-        clearButton.className = 'file-list-clear';
-        clearButton.textContent = 'Clear All';
-        clearButton.addEventListener('click', () => {
-            fileArray.length = 0;
-            fileList.innerHTML = '';
-            updateRunButtonState();
-        });
-        
-        header.appendChild(countSpan);
-        header.appendChild(clearButton);
-        fileList.insertBefore(header, fileList.firstChild);
-    }
-    
     const fileItem = document.createElement('div');
     fileItem.className = 'file-item';
-    
-    // Check if file is an image
-    const isImage = file.type.startsWith('image/');
-    
-    if (isImage) {
-        const img = document.createElement('img');
-        img.className = 'file-item-image';
-        img.alt = file.name;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-        fileItem.appendChild(img);
-    } else {
-        const icon = document.createElement('div');
-        icon.className = 'file-item-icon';
-        icon.innerHTML = `
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-        `;
-        fileItem.appendChild(icon);
-    }
     
     const fileName = document.createElement('span');
     fileName.className = 'file-name';
     fileName.textContent = file.name;
-    fileName.title = file.name; // Show full name on hover
     
     const fileSize = document.createElement('span');
     fileSize.className = 'file-size';
@@ -174,15 +121,12 @@ function displayFile(file, fileList, fileArray) {
     
     const removeButton = document.createElement('button');
     removeButton.className = 'file-remove';
-    removeButton.textContent = '✕';
-    removeButton.title = 'Remove';
-    removeButton.addEventListener('click', (e) => {
-        e.stopPropagation();
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => {
         const index = fileArray.indexOf(file);
         if (index > -1) {
             fileArray.splice(index, 1);
             fileItem.remove();
-            updateFileCount(fileList, fileArray);
             updateRunButtonState();
         }
     });
@@ -191,18 +135,6 @@ function displayFile(file, fileList, fileArray) {
     fileItem.appendChild(fileSize);
     fileItem.appendChild(removeButton);
     fileList.appendChild(fileItem);
-    
-    // Update file count
-    updateFileCount(fileList, fileArray);
-}
-
-// Update file count display
-function updateFileCount(fileList, fileArray) {
-    const countElement = fileList.querySelector('.file-list-count');
-    if (countElement) {
-        const count = fileArray.length;
-        countElement.textContent = `${count} file${count !== 1 ? 's' : ''} uploaded`;
-    }
 }
 
 // Format file size
@@ -275,7 +207,7 @@ async function runEvaluation() {
             });
         } catch (fetchError) {
             clearInterval(progressInterval);
-            throw new Error(`Failed to connect to backend API at ${API_URL}. Make sure the backend is running on port 8000. Error: ${fetchError.message}`);
+            throw new Error(`Failed to connect to backend API at ${API_URL}. Make sure the backend is running on port 8040. Error: ${fetchError.message}`);
         }
         
         clearInterval(progressInterval);
@@ -375,14 +307,11 @@ function displayResultsTable(results, outputDir) {
         vizImg.alt = `Query ${result.query_index} visualization`;
         vizImg.title = `Query ${result.query_index} - Click to view full size`;
         vizImg.style.cursor = 'pointer';
+        vizImg.style.width = '100%';
         vizImg.style.maxWidth = '100%';
-        vizImg.style.width = 'auto';
         vizImg.style.height = 'auto';
-        vizImg.style.display = 'block';
-        vizImg.style.margin = '0 auto';
         vizImg.style.borderRadius = '8px';
         vizImg.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
-        vizImg.style.objectFit = 'contain';
         vizImg.onclick = () => window.open(vizImg.src, '_blank');
         
         vizWrapper.appendChild(vizImg);

@@ -55,7 +55,7 @@ docker run -d \
     --name backend-container \
     --network image-similarity-network \
     $GPU_ARGS \
-    -p 8000:8000 \
+    -p 8040:8040 \
     image-similarity-backend
 
 # Run frontend container
@@ -67,9 +67,9 @@ docker run -d \
     image-similarity-frontend
 
 echo -e "${GREEN}✓ Containers started successfully!${NC}"
-echo -e "${BLUE}Backend API: http://localhost:8000${NC}"
+echo -e "${BLUE}Backend API: http://localhost:8040${NC}"
 echo -e "${BLUE}Frontend UI: http://localhost:8080${NC}"
-echo -e "${BLUE}API Docs: http://localhost:8000/docs${NC}"
+echo -e "${BLUE}API Docs: http://localhost:8040/docs${NC}"
 echo ""
 echo -e "${YELLOW}To view logs:${NC}"
 echo -e "  Backend:  docker logs -f backend-container"
