@@ -4,7 +4,7 @@ A web-based tool for evaluating Visual Place Recognition (VPR) methods using ima
 
 This project takes **one query image** and **one or multiple database images**, and finds images in the database that are similar to the query image.
 
-![Example Result](./src/image.png)
+![Example Result](./src/readme.png)
 
 In the visualization above:
 - **Green bounding boxes** indicate **positive matches** (similar images)
