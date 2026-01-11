@@ -544,11 +544,16 @@ header h1 {
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: box-shadow 0.2s;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    object-fit: contain;
 }
 
 .result-image:hover {
-    transform: scale(1.02);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 

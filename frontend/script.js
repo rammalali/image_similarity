@@ -375,11 +375,14 @@ function displayResultsTable(results, outputDir) {
         vizImg.alt = `Query ${result.query_index} visualization`;
         vizImg.title = `Query ${result.query_index} - Click to view full size`;
         vizImg.style.cursor = 'pointer';
-        vizImg.style.width = '100%';
         vizImg.style.maxWidth = '100%';
+        vizImg.style.width = 'auto';
         vizImg.style.height = 'auto';
+        vizImg.style.display = 'block';
+        vizImg.style.margin = '0 auto';
         vizImg.style.borderRadius = '8px';
         vizImg.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+        vizImg.style.objectFit = 'contain';
         vizImg.onclick = () => window.open(vizImg.src, '_blank');
         
         vizWrapper.appendChild(vizImg);
