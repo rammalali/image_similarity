@@ -75,7 +75,7 @@ header h1 {
 
 .upload-area {
     position: relative;
-    min-height: 300px;
+    min-height: 200px;
 }
 
 .upload-placeholder {
@@ -110,21 +110,69 @@ header h1 {
 }
 
 .file-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
     margin-top: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 5px;
+    border-radius: 8px;
+}
+
+.file-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.file-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.file-list::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 4px;
+}
+
+.file-list::-webkit-scrollbar-thumb:hover {
+    background: #5568d3;
 }
 
 .file-item {
     background: white;
-    padding: 12px 15px;
+    padding: 8px;
     border-radius: 8px;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     animation: slideIn 0.3s ease;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.file-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.file-item-image {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: #f0f0f0;
+}
+
+.file-item-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 6px;
+    opacity: 0.6;
+    color: #667eea;
 }
 
 @keyframes slideIn {
@@ -139,33 +187,86 @@ header h1 {
 }
 
 .file-name {
-    flex: 1;
-    font-size: 0.95em;
+    width: 100%;
+    font-size: 0.75em;
     color: #333;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
+    margin-bottom: 4px;
+    font-weight: 500;
 }
 
 .file-size {
     color: #6c757d;
-    font-size: 0.85em;
-    margin-left: 10px;
+    font-size: 0.7em;
+    text-align: center;
+    margin-bottom: 6px;
 }
 
 .file-remove {
     background: #dc3545;
     color: white;
     border: none;
-    border-radius: 5px;
-    padding: 5px 10px;
+    border-radius: 4px;
+    padding: 4px 8px;
     cursor: pointer;
-    font-size: 0.85em;
+    font-size: 0.7em;
     transition: background 0.2s;
+    width: 100%;
+    margin-top: auto;
 }
 
 .file-remove:hover {
     background: #c82333;
+}
+
+.file-count-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.file-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 0 5px;
+}
+
+.file-list-count {
+    font-size: 0.9em;
+    color: #667eea;
+    font-weight: 600;
+}
+
+.file-list-clear {
+    background: transparent;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+    border-radius: 5px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.2s;
+}
+
+.file-list-clear:hover {
+    background: #dc3545;
+    color: white;
 }
 
 .controls-section {
@@ -541,6 +642,15 @@ header h1 {
     .result-image, .prediction-image {
         max-width: 100px;
         max-height: 100px;
+    }
+    
+    .file-list {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        max-height: 300px;
+    }
+    
+    .file-item-image {
+        height: 60px;
     }
 }
 
