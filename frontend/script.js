@@ -1,5 +1,12 @@
-// API endpoint URL
-const API_URL = 'http://localhost:8000/evaluate';
+// API endpoint URL - automatically detect based on current host
+const getApiUrl = () => {
+    // If running in browser, use same host with port 8000
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    // Use port 8000 for backend
+    return `${protocol}//${host}:8000/evaluate`;
+};
+const API_URL = getApiUrl();
 
 // File storage
 let queryFiles = [];
@@ -12,13 +19,15 @@ const queryFilesInput = document.getElementById('queryFiles');
 const databaseFilesInput = document.getElementById('databaseFiles');
 const queryFileList = document.getElementById('queryFileList');
 const databaseFileList = document.getElementById('databaseFileList');
-const useLightGlueCheckbox = document.getElementById('useLightGlue');
 const runButton = document.getElementById('runButton');
 const progressSection = document.getElementById('progressSection');
 const progressBar = document.getElementById('progressBar');
 const progressPercentage = document.getElementById('progressPercentage');
 const progressStatus = document.getElementById('progressStatus');
 const resultsSection = document.getElementById('resultsSection');
+const resultsTable = document.getElementById('resultsTable');
+const downloadButton = document.getElementById('downloadButton');
+let currentResults = null;
 
 // Initialize
 function init() {
@@ -34,6 +43,9 @@ function init() {
     
     // Run button
     runButton.addEventListener('click', runEvaluation);
+    
+    // Download button
+    downloadButton.addEventListener('click', downloadResults);
     
     // Update button state
     updateRunButtonState();
@@ -69,13 +81,27 @@ function addFiles(files, type) {
     const fileArray = type === 'query' ? queryFiles : databaseFiles;
     const fileList = type === 'query' ? queryFileList : databaseFileList;
     
-    files.forEach(file => {
-        // Check if file already exists
-        if (!fileArray.find(f => f.name === file.name && f.size === file.size)) {
+    // For query, only allow one file (replace existing)
+    if (type === 'query') {
+        // Clear existing files
+        fileArray.length = 0;
+        fileList.innerHTML = '';
+        // Add only the first file
+        if (files.length > 0) {
+            const file = files[0];
             fileArray.push(file);
             displayFile(file, fileList, fileArray);
         }
-    });
+    } else {
+        // For database, allow multiple files
+        files.forEach(file => {
+            // Check if file already exists
+            if (!fileArray.find(f => f.name === file.name && f.size === file.size)) {
+                fileArray.push(file);
+                displayFile(file, fileList, fileArray);
+            }
+        });
+    }
     
     updateRunButtonState();
 }
@@ -130,7 +156,7 @@ function updateRunButtonState() {
 // Run evaluation
 async function runEvaluation() {
     if (queryFiles.length === 0 || databaseFiles.length === 0) {
-        alert('Please upload both query and database files');
+        alert('Please upload both query image and database files');
         return;
     }
     
@@ -159,7 +185,7 @@ async function runEvaluation() {
         });
         
         // Add form parameters
-        formData.append('use_lightglue_only', useLightGlueCheckbox.checked);
+        formData.append('use_lightglue_only', 'true');  // Always use LightGlue only
         formData.append('lightglue_match_threshold', '10');
         formData.append('image_size', '512,512');
         formData.append('recall_values', '1,5,10,20');
@@ -173,10 +199,16 @@ async function runEvaluation() {
         
         // Make API call
         updateProgress(10, 'Uploading files...');
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            body: formData
-        });
+        let response;
+        try {
+            response = await fetch(API_URL, {
+                method: 'POST',
+                body: formData
+            });
+        } catch (fetchError) {
+            clearInterval(progressInterval);
+            throw new Error(`Failed to connect to backend API at ${API_URL}. Make sure the backend is running on port 8000. Error: ${fetchError.message}`);
+        }
         
         clearInterval(progressInterval);
         
@@ -237,11 +269,112 @@ function updateProgress(percentage, status) {
 
 // Show results
 function showResults(result) {
-    document.getElementById('resultQueries').textContent = result.num_queries || '-';
+    currentResults = result;
     document.getElementById('resultDatabase').textContent = result.num_database || '-';
-    document.getElementById('resultOutput').textContent = result.output_dir || '-';
+    
+    // Display results table if results are available
+    if (result.results && result.results.length > 0) {
+        displayResultsTable(result.results, result.output_dir);
+    }
+    
     resultsSection.style.display = 'block';
     resultsSection.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Display results as simple image grid
+function displayResultsTable(results, outputDir) {
+    // Clear previous results
+    resultsTable.innerHTML = '';
+    
+    // Create a container for visualizations
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '40px';
+    container.style.width = '100%';
+    container.style.alignItems = 'stretch';
+    
+    results.forEach((result, idx) => {
+        const vizWrapper = document.createElement('div');
+        vizWrapper.style.width = '100%';
+        vizWrapper.style.marginBottom = '20px';
+        vizWrapper.style.display = 'flex';
+        vizWrapper.style.justifyContent = 'center';
+        
+        const vizImg = document.createElement('img');
+        vizImg.src = getImageUrl(result.visualization_image, outputDir);
+        vizImg.className = 'result-image';
+        vizImg.alt = `Query ${result.query_index} visualization`;
+        vizImg.title = `Query ${result.query_index} - Click to view full size`;
+        vizImg.style.cursor = 'pointer';
+        vizImg.style.width = '100%';
+        vizImg.style.maxWidth = '100%';
+        vizImg.style.height = 'auto';
+        vizImg.style.borderRadius = '8px';
+        vizImg.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+        vizImg.onclick = () => window.open(vizImg.src, '_blank');
+        
+        vizWrapper.appendChild(vizImg);
+        container.appendChild(vizWrapper);
+    });
+    
+    resultsTable.appendChild(container);
+}
+
+// Get image URL from backend
+function getImageUrl(imagePath, outputDir) {
+    // Extract relative path from output_dir
+    let relativePath = imagePath.replace(outputDir, '');
+    if (relativePath.startsWith('/')) {
+        relativePath = relativePath.substring(1);
+    }
+    const apiBase = getApiUrl().replace('/evaluate', '');
+    return `${apiBase}/outputs/${relativePath}`;
+}
+
+// Download results as zip
+async function downloadResults() {
+    if (!currentResults) {
+        alert('No results available to download');
+        return;
+    }
+    
+    try {
+        downloadButton.disabled = true;
+        downloadButton.textContent = '⏳ Preparing download...';
+        
+        const apiBase = getApiUrl().replace('/evaluate', '');
+        const logDir = currentResults.output_dir.split('/').pop();
+        const response = await fetch(`${apiBase}/results/${logDir}/download`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(currentResults)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to download results');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `results_${logDir}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        downloadButton.textContent = '📥 Download Results (ZIP)';
+    } catch (error) {
+        console.error('Download error:', error);
+        alert('Error downloading results: ' + error.message);
+        downloadButton.textContent = '📥 Download Results (ZIP)';
+    } finally {
+        downloadButton.disabled = false;
+    }
 }
 
 // Initialize on load

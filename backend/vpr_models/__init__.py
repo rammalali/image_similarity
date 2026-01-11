@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     )
 
 
-def get_model(method, backbone=None, descriptors_dimension=None):
+def get_model(method, backbone=None, descriptors_dimension=None, device="cpu"):
     if method == "sfrs":
         model = sfrs.SFRSModel()
     elif method == "apgem":
@@ -37,7 +37,8 @@ def get_model(method, backbone=None, descriptors_dimension=None):
         )
     elif method.startswith("anyloc"):
         domain = method.split("-")[1]
-        anyloc = torch.hub.load("AnyLoc/DINO", "get_vlad_model", backbone="DINOv2", domain=domain, device="cuda")
+        # Use device parameter instead of hardcoded "cuda"
+        anyloc = torch.hub.load("AnyLoc/DINO", "get_vlad_model", backbone="DINOv2", domain=domain, device=device)
         model = ResizingWrapper(anyloc, resize_type="dino_v2_resize")
     elif method == "salad":
         salad = torch.hub.load("serizba/salad", "dinov2_salad")

@@ -324,7 +324,7 @@ class LightGlue(nn.Module):
         "input_dim": 256,  # input descriptor dimension (autoselected from weights)
         "descriptor_dim": 256,
         "add_scale_ori": False,
-        "n_layers": 9,
+        "n_layers": 6,
         "num_heads": 4,
         "flash": True,  # enable FlashAttention if available.
         "mp": False,  # enable mixed precision

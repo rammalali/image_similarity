@@ -8,14 +8,14 @@ class DISK(Extractor):
     default_conf = {
         "weights": "depth",
         "max_num_keypoints": None,
-        "desc_dim": 128,
+        "desc_dim": 32,
         "nms_window_size": 5,
         "detection_threshold": 0.0,
-        "pad_if_not_divisible": True,
+        "pad_if_not_divisible": False,
     }
 
     preprocess_conf = {
-        "resize": 1024,
+        "resize": 256,
         "grayscale": False,
     }
 

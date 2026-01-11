@@ -7,8 +7,11 @@ Pillow
 pydantic
 scikit_learn
 scipy
-torch
-torchvision
+torch --index-url https://download.pytorch.org/whl/cu126
+torchvision --index-url https://download.pytorch.org/whl/cu126
 tqdm
 uvicorn
 python-multipart
+opencv-python
+matplotlib
+kornia>=0.6.11

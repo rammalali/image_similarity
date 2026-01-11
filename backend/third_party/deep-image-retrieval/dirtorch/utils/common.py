@@ -134,13 +134,15 @@ def load_checkpoint(filename, iscuda=False):
 
     if iscuda and 'optimizer' in checkpoint:
         try:
+            # Determine device: use cuda if available and iscuda is True, otherwise cpu
+            device = torch.device("cuda" if (iscuda and torch.cuda.is_available()) else "cpu")
             for state in checkpoint['optimizer']['state'].values():
                 for k, v in state.items():
                     if iscuda and torch.is_tensor(v):
-                        state[k] = v.cuda()
+                        state[k] = v.to(device)
         except RuntimeError as e:
             print("RuntimeError:", e, "(machine %s, GPU %s)" % (
-                os.environ['HOSTNAME'], os.environ['CUDA_VISIBLE_DEVICES']),
+                os.environ['HOSTNAME'], os.environ.get('CUDA_VISIBLE_DEVICES', 'N/A')),
                 file=sys.stderr)
             sys.exit(1)
 
@@ -148,7 +150,10 @@ def load_checkpoint(filename, iscuda=False):
 
 
 def switch_model_to_cuda(model, iscuda=True, checkpoint=None):
-    if iscuda:
+    # Determine device: use cuda if available and iscuda is True, otherwise cpu
+    device = torch.device("cuda" if (iscuda and torch.cuda.is_available()) else "cpu")
+    
+    if iscuda and torch.cuda.is_available():
         if checkpoint:
             checkpoint['state_dict'] = {'module.' + k: v for k, v in checkpoint['state_dict'].items()}
         try:
@@ -163,13 +168,16 @@ def switch_model_to_cuda(model, iscuda=True, checkpoint=None):
                    (callable(val) and var.startswith('get_')):
                     setattr(model, var, val)
 
-            model.cuda()
+            model.to(device)
             model.isasync = True
         except RuntimeError as e:
             print("RuntimeError:", e, "(machine %s, GPU %s)" % (
-                os.environ['HOSTNAME'], os.environ['CUDA_VISIBLE_DEVICES']),
+                os.environ.get('HOSTNAME', 'unknown'), os.environ.get('CUDA_VISIBLE_DEVICES', 'N/A')),
                 file=sys.stderr)
             sys.exit(1)
+    else:
+        # Move to CPU if cuda not available or iscuda is False
+        model.to(device)
 
     model.iscuda = iscuda
     return model
@@ -206,12 +214,14 @@ def variables(inputs, iscuda, not_on_gpu=[]):
     ''' convert several Tensors to cuda.Variables
     Tensor whose index are in not_on_gpu stays on cpu.
     '''
+    # Determine device: use cuda if available and iscuda is True, otherwise cpu
+    device = torch.device("cuda" if (iscuda and torch.cuda.is_available()) else "cpu")
     inputs_var = []
 
     for i, x in enumerate(inputs):
         if i not in not_on_gpu and not isinstance(x, (tuple, list)):
             if iscuda:
-                x = x.cuda(non_blocking=True)
+                x = x.to(device, non_blocking=True)
             x = torch.autograd.Variable(x)
         inputs_var.append(x)
 

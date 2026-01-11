@@ -16,17 +16,17 @@
         <div class="main-content">
             <!-- Left Side: Query Upload -->
             <div class="upload-section query-section">
-                <h2>Query Images</h2>
+                <h2>Query Image</h2>
                 <div class="upload-area" id="queryUploadArea">
-                    <input type="file" id="queryFiles" multiple accept="image/*,.zip" style="display: none;">
+                    <input type="file" id="queryFiles" accept="image/*,.zip" style="display: none;">
                     <div class="upload-placeholder">
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <p>Click to upload or drag files here</p>
-                        <p class="upload-hint">Supports images (.jpg, .png) or zip files</p>
+                        <p>Click to upload or drag file here</p>
+                        <p class="upload-hint">Supports image (.jpg, .png) or zip file</p>
                     </div>
                     <div class="file-list" id="queryFileList"></div>
                 </div>
@@ -53,13 +53,6 @@
 
         <!-- Controls Section -->
         <div class="controls-section">
-            <div class="control-group">
-                <label class="toggle-label">
-                    <input type="checkbox" id="useLightGlue" class="toggle-input">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-text">Use LightGlue Only</span>
-                </label>
-            </div>
             <button id="runButton" class="run-button" disabled>
                 <span class="button-text">Run Evaluation</span>
                 <span class="button-loader" style="display: none;">
@@ -82,21 +75,19 @@
 
         <!-- Results Section -->
         <div class="results-section" id="resultsSection" style="display: none;">
-            <h3>Evaluation Complete!</h3>
+            <div class="results-header">
+                <h3>Evaluation Complete!</h3>
+                <button id="downloadButton" class="download-button">
+                    <span>📥 Download Results (ZIP)</span>
+                </button>
+            </div>
             <div class="result-info">
-                <div class="result-item">
-                    <span class="result-label">Queries:</span>
-                    <span class="result-value" id="resultQueries">-</span>
-                </div>
                 <div class="result-item">
                     <span class="result-label">Database:</span>
                     <span class="result-value" id="resultDatabase">-</span>
                 </div>
-                <div class="result-item">
-                    <span class="result-label">Output Directory:</span>
-                    <span class="result-value" id="resultOutput">-</span>
-                </div>
             </div>
+            <div id="resultsTable" class="results-table-container"></div>
         </div>
     </div>
 

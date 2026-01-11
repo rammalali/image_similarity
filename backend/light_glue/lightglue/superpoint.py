@@ -113,7 +113,7 @@ class SuperPoint(Extractor):
     }
 
     preprocess_conf = {
-        "resize": 1024,
+        "resize": 512,
     }
 
     required_data_keys = ["image"]

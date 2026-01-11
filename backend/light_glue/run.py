@@ -1,10 +1,6 @@
 from light_glue.lightglue.lightglue import LightGlue
 from light_glue.lightglue.disk import DISK
 from light_glue.lightglue.utils import load_image, rbd
-import torch
-extractor = DISK(max_num_keypoints=2048).eval().cuda()
-matcher = LightGlue(features='disk').eval().cuda()
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def light_glue_checker(extractor, matcher, device, image_path0, image_path1, score_threshold=0.7):
     image0 = load_image(image_path0).to(device)

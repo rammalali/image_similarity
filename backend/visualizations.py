@@ -5,8 +5,9 @@ import torch
 from PIL import Image, ImageOps
 import torchvision.transforms as tfm
 import time
+from pathlib import Path
 from light_glue.lightglue.lightglue import LightGlue
-from light_glue.lightglue.disk import DISK
+from light_glue.lightglue.superpoint import SuperPoint
 from light_glue.run import light_glue_checker
 
 LIGHTGLUE_AVAILABLE = True
@@ -63,13 +64,14 @@ def draw_box(img, c=(0, 1, 0), thickness=20):
     return tfm.ToPILImage()(img)
 
 
-def build_prediction_image(images_paths, preds_correct, distances=None, num_matches=None):
+def build_prediction_image(images_paths, label, preds_correct, distances=None, num_matches=None):
     """Build images in a grid layout: query first, then predictions.
     If there are more than 4 predictions, arrange them in multiple rows (4 per row).
     
     Parameters
     ----------
     images_paths : list of image paths
+    label : bool or None, if None, no labels will be shown
     preds_correct : list of bool/None indicating if prediction is correct (green) or not (red)
     distances : list of float, optional, distances for each prediction to display
     num_matches : list of int, optional, number of LightGlue matches for each prediction
@@ -77,29 +79,32 @@ def build_prediction_image(images_paths, preds_correct, distances=None, num_matc
     assert len(images_paths) == len(preds_correct)
     num_predictions = len(preds_correct) - 1  # Exclude query
     
-    labels = ["Query"]
-    for i, is_correct in enumerate(preds_correct[1:]):
-        # Build label components
-        label_parts = []
-        
-        # Prediction number and status
-        if is_correct is None:
-            label_parts.append(f"Pred{i}")
-        elif is_correct:
-            label_parts.append(f"Pred{i} ✓")
-        else:
-            label_parts.append(f"Pred{i} ✗")
-        
-        # Add match count if available
-        if num_matches is not None and i < len(num_matches) and num_matches[i] is not None:
-            label_parts.append(f"matches: {num_matches[i]}")
-        
-        # Add distance if available
-        if distances is not None and i < len(distances):
-            label_parts.append(f"dist: {distances[i]:.4f}")
-        
-        # Join all parts with newlines
-        labels.append("\n".join(label_parts))
+    # Only create labels if label is not None
+    labels = []
+    if label is not None:
+        labels = ["Query"]
+        for i, is_correct in enumerate(preds_correct[1:]):
+            # Build label components
+            label_parts = []
+            
+            # Prediction number and status
+            if is_correct is None:
+                label_parts.append(f"Pred{i}")
+            elif is_correct:
+                label_parts.append(f"Pred{i} ✓")
+            else:
+                label_parts.append(f"Pred{i} ✗")
+            
+            # Add match count if available
+            if num_matches is not None and i < len(num_matches) and num_matches[i] is not None:
+                label_parts.append(f"matches: {num_matches[i]}")
+            
+            # Add distance if available
+            if distances is not None and i < len(distances):
+                label_parts.append(f"dist: {distances[i]:.4f}")
+            
+            # Join all parts with newlines
+            labels.append("\n".join(label_parts))
 
     images = [Image.open(path).convert("RGB") for path in images_paths]
     for img_idx, (img, is_correct) in enumerate(zip(images, preds_correct)):
@@ -150,36 +155,41 @@ def build_prediction_image(images_paths, preds_correct, distances=None, num_matc
             concat_image.paste(img, (x, 0))
             x += IMG_HW + SPACE
 
-    try:
-        # Create labels for each row to match the grid layout
-        if num_predictions > 4:
-            # Grid layout: create label rows
-            label_rows = []
-            # First row: Query + first 3 predictions (4 labels)
-            first_row_labels = labels[:4]
-            label_rows.append(write_labels_to_image(first_row_labels))
-            
-            # Remaining rows: 4 predictions per row
-            remaining_labels = labels[4:]
-            for row_idx in range(1, num_rows):
-                row_labels = remaining_labels[(row_idx - 1) * 4:row_idx * 4]
-                # Pad with empty labels if needed to maintain 4 columns
-                while len(row_labels) < 4:
-                    row_labels.append("")
-                if len(row_labels) > 0 and any(row_labels):  # Only add if there are labels
-                    label_rows.append(write_labels_to_image(row_labels))
-            
-            # Concatenate all label rows vertically
-            if label_rows:
-                labels_image = Image.fromarray(np.concatenate([np.array(lr) for lr in label_rows], axis=0))
+    # Only add labels if label is not None
+    if label is not None and len(labels) > 0:
+        try:
+            # Create labels for each row to match the grid layout
+            if num_predictions > 4:
+                # Grid layout: create label rows
+                label_rows = []
+                # First row: Query + first 3 predictions (4 labels)
+                first_row_labels = labels[:4]
+                label_rows.append(write_labels_to_image(first_row_labels))
+                
+                # Remaining rows: 4 predictions per row
+                remaining_labels = labels[4:]
+                for row_idx in range(1, num_rows):
+                    row_labels = remaining_labels[(row_idx - 1) * 4:row_idx * 4]
+                    # Pad with empty labels if needed to maintain 4 columns
+                    while len(row_labels) < 4:
+                        row_labels.append("")
+                    if len(row_labels) > 0 and any(row_labels):  # Only add if there are labels
+                        label_rows.append(write_labels_to_image(row_labels))
+                
+                # Concatenate all label rows vertically
+                if label_rows:
+                    labels_image = Image.fromarray(np.concatenate([np.array(lr) for lr in label_rows], axis=0))
+                else:
+                    labels_image = write_labels_to_image(labels[:4])
             else:
-                labels_image = write_labels_to_image(labels[:4])
-        else:
-            labels_image = write_labels_to_image(labels)
-        
-        # Transform the images to np arrays for concatenation
-        final_image = Image.fromarray(np.concatenate((np.array(labels_image), np.array(concat_image)), axis=0))
-    except OSError:  # Handle error in case of missing PIL ImageFont
+                labels_image = write_labels_to_image(labels)
+            
+            # Transform the images to np arrays for concatenation
+            final_image = Image.fromarray(np.concatenate((np.array(labels_image), np.array(concat_image)), axis=0))
+        except OSError:  # Handle error in case of missing PIL ImageFont
+            final_image = concat_image
+    else:
+        # No labels, just return the images
         final_image = concat_image
 
     return final_image
@@ -195,8 +205,82 @@ def save_file_with_paths(query_path, preds_paths, output_path):
         file.write("\n".join(file_content))
 
 
+def save_preds_lightglue_only(predictions, match_counts, eval_ds, output_dir, lightglue_match_threshold=10):
+    """Fast visualization for LightGlue-only mode using pre-computed match counts.
+    This avoids re-running LightGlue matching which was already done during evaluation.
+    
+    Returns:
+        results: List of dicts with query info and prediction details
+    """
+    viz_dir = output_dir / "preds"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+    
+    results = []
+    
+    for query_index, preds in enumerate(tqdm(predictions, desc="Saving LightGlue predictions")):
+        query_path = eval_ds.queries_paths[query_index]
+        list_of_images_paths = [query_path]
+        
+        # Add all predictions
+        for pred in preds:
+            pred_path = eval_ds.database_paths[pred]
+            list_of_images_paths.append(pred_path)
+        
+        # Use pre-computed match counts to determine positive/negative
+        preds_correct = [None]  # Query has no box
+        num_matches_list = []
+        prediction_details = []
+        
+        query_match_counts = match_counts[query_index]
+        for pred_idx, (pred, num_matches) in enumerate(zip(preds, query_match_counts)):
+            is_positive = bool(num_matches >= lightglue_match_threshold)  # Convert to native Python bool
+            preds_correct.append(is_positive)
+            num_matches_list.append(int(num_matches))  # Convert to int
+            prediction_details.append({
+                "pred_index": int(pred_idx),
+                "image_path": str(eval_ds.database_paths[pred]),
+                "is_positive": is_positive,
+                "match_count": int(num_matches)
+            })
+        
+        # Build and save visualization
+        label = None
+        prediction_image = build_prediction_image(
+            list_of_images_paths, label, preds_correct, distances=None, num_matches=num_matches_list
+        )
+        
+        # Save as JPG
+        pred_image_path = viz_dir / f"{query_index:03d}.jpg"
+        prediction_image.save(pred_image_path)
+        
+        # Save as PDF
+        pred_pdf_path = viz_dir / f"{query_index:03d}.pdf"
+        if prediction_image.mode != 'RGB':
+            prediction_image = prediction_image.convert('RGB')
+        prediction_image.save(pred_pdf_path, "PDF", resolution=100.0)
+        
+        # Save paths file
+        save_file_with_paths(
+            query_path=list_of_images_paths[0],
+            preds_paths=list_of_images_paths[1:],
+            output_path=viz_dir / f"{query_index:03d}.txt",
+        )
+        
+        # Store result info with relative paths
+        output_dir_name = output_dir.name if hasattr(output_dir, 'name') else str(output_dir).split('/')[-1]
+        results.append({
+            "query_index": int(query_index),
+            "query_image": str(Path(query_path).name),  # Just filename for display
+            "query_image_path": str(query_path),  # Full path for download
+            "predictions": prediction_details,
+            "visualization_image": f"{output_dir_name}/preds/{pred_image_path.name}"  # Relative path for serving
+        })
+    
+    return results
+
+
 def save_preds(predictions, eval_ds, output_dir, distances=None, distance_threshold=None,
-                use_lightglue_only=False, lightglue_match_threshold=10):
+                use_lightglue_only=False, lightglue_match_threshold=10, device=None):
     """For each query, save an image containing the query and its top predictions,
     and a file with the paths of the query and its predictions.
     Predictions are marked as positive (green) or negative (red) based on LightGlue matches and/or distance confidence.
@@ -216,6 +300,8 @@ def save_preds(predictions, eval_ds, output_dir, distances=None, distance_thresh
         If False, use LightGlue first, then distance threshold.
     lightglue_match_threshold : int, default 10
         Minimum number of LightGlue matches required for positive prediction (when use_lightglue_only=True).
+    device : torch.device, optional
+        Device to use for LightGlue. If None, defaults to cpu if cuda is not available.
     """
     viz_dir = output_dir / "preds"
     viz_dir.mkdir(parents=True, exist_ok=True)
@@ -223,11 +309,12 @@ def save_preds(predictions, eval_ds, output_dir, distances=None, distance_thresh
     # Initialize LightGlue extractor and matcher if available
     extractor = None
     matcher = None
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if LIGHTGLUE_AVAILABLE:
-        extractor = DISK(max_num_keypoints=2048).eval().to(device)
-        matcher = LightGlue(features='disk').eval().to(device)
+        extractor = SuperPoint(max_num_keypoints=256).eval().to(device)
+        matcher = LightGlue(features='superpoint').eval().to(device)
     
     # Determine threshold if not provided
     if distances is not None and distance_threshold is None:
@@ -304,8 +391,9 @@ def save_preds(predictions, eval_ds, output_dir, distances=None, distance_thresh
             preds_correct.append(is_positive)
             num_matches_list.append(num_matches)
 
+        label = None  # Don't show labels, only images
         prediction_image = build_prediction_image(
-            list_of_images_paths, preds_correct, distances=query_distances, num_matches=num_matches_list
+            list_of_images_paths, label, preds_correct, distances=query_distances, num_matches=num_matches_list
         )
         
         # Save as JPG
