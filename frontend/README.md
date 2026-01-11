@@ -1,31 +1,39 @@
-# VPR Evaluation Frontend
+# Frontend - VPR Evaluation UI
 
-Frontend UI for the VPR Evaluation Tool.
+Frontend web interface for the VPR Evaluation Tool.
 
-## Setup
+## Run with Docker
 
-1. Install dependencies:
+### Build the image
+
 ```bash
-npm install
+cd frontend
+docker build -t image-similarity-frontend .
 ```
 
-2. Start development server:
+### Run the container
+
 ```bash
-npm run dev
+docker run -d \
+    --name frontend-container \
+    --network image-similarity-network \
+    -p 8080:8080 \
+    image-similarity-frontend
 ```
 
-The frontend will be available at `http://localhost:8080`
+### View logs
 
-## Serve Static Files
-
-To serve the frontend without development features:
 ```bash
-npm run serve
+docker logs -f frontend-container
 ```
 
-## Features
+### Stop the container
 
-- Simple static file serving with http-server
-- Compatible with Node.js 12+
-- No build step required
+```bash
+docker stop frontend-container
+docker rm frontend-container
+```
 
+## Access the UI
+
+Once running, visit: `http://localhost:8080`
