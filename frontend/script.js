@@ -31,13 +31,25 @@ let currentResults = null;
 
 // Initialize
 function init() {
-    // Query upload handlers
-    queryUploadArea.addEventListener('click', () => queryFilesInput.click());
+    // Query upload handlers - only trigger on placeholder click, not on file list
+    queryUploadArea.addEventListener('click', (e) => {
+        // Only open file dialog if clicking on the placeholder area, not on file list or buttons
+        if (e.target.closest('.upload-placeholder') || 
+            (e.target === queryUploadArea && queryFiles.length === 0)) {
+            queryFilesInput.click();
+        }
+    });
     queryFilesInput.addEventListener('change', (e) => handleFileSelect(e, 'query'));
     setupDragAndDrop(queryUploadArea, 'query');
     
-    // Database upload handlers
-    databaseUploadArea.addEventListener('click', () => databaseFilesInput.click());
+    // Database upload handlers - only trigger on placeholder click, not on file list
+    databaseUploadArea.addEventListener('click', (e) => {
+        // Only open file dialog if clicking on the placeholder area, not on file list or buttons
+        if (e.target.closest('.upload-placeholder') || 
+            (e.target === databaseUploadArea && databaseFiles.length === 0)) {
+            databaseFilesInput.click();
+        }
+    });
     databaseFilesInput.addEventListener('change', (e) => handleFileSelect(e, 'database'));
     setupDragAndDrop(databaseUploadArea, 'database');
     
@@ -104,6 +116,7 @@ function addFiles(files, type) {
     }
     
     updateRunButtonState();
+    updateFileListHeader(fileList, fileArray);
 }
 
 // Display file in list
@@ -122,19 +135,61 @@ function displayFile(file, fileList, fileArray) {
     const removeButton = document.createElement('button');
     removeButton.className = 'file-remove';
     removeButton.textContent = 'Remove';
-    removeButton.addEventListener('click', () => {
+    removeButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent event from bubbling to upload area
+        e.preventDefault();
         const index = fileArray.indexOf(file);
         if (index > -1) {
             fileArray.splice(index, 1);
             fileItem.remove();
             updateRunButtonState();
+            updateFileListHeader(fileList, fileArray);
         }
+    });
+    
+    // Prevent file item clicks from triggering upload dialog
+    fileItem.addEventListener('click', (e) => {
+        e.stopPropagation();
     });
     
     fileItem.appendChild(fileName);
     fileItem.appendChild(fileSize);
     fileItem.appendChild(removeButton);
     fileList.appendChild(fileItem);
+}
+
+// Update file list header with count and clear all button
+function updateFileListHeader(fileList, fileArray) {
+    // Remove existing header if any
+    const existingHeader = fileList.querySelector('.file-list-header');
+    if (existingHeader) {
+        existingHeader.remove();
+    }
+    
+    // Only show header if there are files
+    if (fileArray.length > 0) {
+        const header = document.createElement('div');
+        header.className = 'file-list-header';
+        
+        const count = document.createElement('span');
+        count.className = 'file-list-count';
+        count.textContent = `${fileArray.length} file${fileArray.length > 1 ? 's' : ''}`;
+        
+        const clearAllButton = document.createElement('button');
+        clearAllButton.className = 'file-list-clear';
+        clearAllButton.textContent = 'Clear All';
+        clearAllButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent event from bubbling to upload area
+            e.preventDefault();
+            fileArray.length = 0;
+            fileList.innerHTML = '';
+            updateRunButtonState();
+        });
+        
+        header.appendChild(count);
+        header.appendChild(clearAllButton);
+        fileList.insertBefore(header, fileList.firstChild);
+    }
 }
 
 // Format file size
@@ -194,11 +249,16 @@ async function runEvaluation() {
         formData.append('device', 'cuda');
         formData.append('log_dir', 'default');
         
-        // Simulate progress updates (since we can't track real progress from API)
-        const progressInterval = simulateProgress();
+        // Calculate estimated time: 0.75 seconds per database image
+        const numImages = databaseFiles.length;
+        const estimatedSeconds = numImages * 0.75;
+        const estimatedMs = estimatedSeconds * 1000;
+        
+        // Start time-based progress bar
+        const progressInterval = startTimeBasedProgress(estimatedMs);
         
         // Make API call
-        updateProgress(10, 'Uploading files...');
+        updateProgress(5, 'Uploading files...');
         let response;
         try {
             response = await fetch(API_URL, {
@@ -217,10 +277,8 @@ async function runEvaluation() {
             throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
         
-        updateProgress(90, 'Processing results...');
-        const result = await response.json();
-        
         updateProgress(100, 'Complete!');
+        const result = await response.json();
         
         // Show results
         setTimeout(() => {
@@ -241,23 +299,28 @@ async function runEvaluation() {
     }
 }
 
-// Simulate progress (since we can't track real progress)
-function simulateProgress() {
-    let currentProgress = 10;
+function startTimeBasedProgress(totalMs) {
+    const startTime = Date.now();
+    const updateInterval = 100; // Update every 100ms for smooth animation
+    const statuses = [
+        'Extracting features...',
+        'Matching images...',
+        'Processing matches...',
+        'Generating visualizations...'
+    ];
+    let statusIndex = 0;
+    
     return setInterval(() => {
-        if (currentProgress < 85) {
-            currentProgress += Math.random() * 5;
-            const statuses = [
-                'Extracting descriptors...',
-                'Building index...',
-                'Finding matches...',
-                'Processing images...',
-                'Generating visualizations...'
-            ];
-            const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-            updateProgress(Math.min(currentProgress, 85), randomStatus);
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(95, (elapsed / totalMs) * 100); // Cap at 95% until complete
+        
+        // Rotate through status messages
+        if (Math.floor(elapsed / 2000) !== Math.floor((elapsed - updateInterval) / 2000)) {
+            statusIndex = (statusIndex + 1) % statuses.length;
         }
-    }, 2000);
+        
+        updateProgress(progress, statuses[statusIndex]);
+    }, updateInterval);
 }
 
 // Update progress bar
@@ -302,7 +365,12 @@ function displayResultsTable(results, outputDir) {
         vizWrapper.style.justifyContent = 'center';
         
         const vizImg = document.createElement('img');
-        vizImg.src = getImageUrl(result.visualization_image, outputDir);
+        const imageUrl = getImageUrl(result.visualization_image, outputDir);
+        
+        // Clear src first to force browser to reload image
+        vizImg.src = '';
+        
+        // Set image properties
         vizImg.className = 'result-image';
         vizImg.alt = `Query ${result.query_index} visualization`;
         vizImg.title = `Query ${result.query_index} - Click to view full size`;
@@ -312,7 +380,17 @@ function displayResultsTable(results, outputDir) {
         vizImg.style.height = 'auto';
         vizImg.style.borderRadius = '8px';
         vizImg.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
-        vizImg.onclick = () => window.open(vizImg.src, '_blank');
+        
+        // Set src after a tiny delay to ensure browser treats it as new image
+        setTimeout(() => {
+            vizImg.src = imageUrl;
+        }, 10);
+        
+        // Remove cache-busting parameter when opening in new tab (cleaner URL)
+        vizImg.onclick = () => {
+            const cleanUrl = imageUrl.split('?')[0];
+            window.open(cleanUrl, '_blank');
+        };
         
         vizWrapper.appendChild(vizImg);
         container.appendChild(vizWrapper);
@@ -321,15 +399,32 @@ function displayResultsTable(results, outputDir) {
     resultsTable.appendChild(container);
 }
 
-// Get image URL from backend
+// Get image URL from backend with cache-busting
+// imagePath format: "default/preds/000.jpg" or similar
+// outputDir format: "outputs/default" or similar
 function getImageUrl(imagePath, outputDir) {
-    // Extract relative path from output_dir
+    const apiBase = getApiUrl().replace('/evaluate', '');
+    
+    // Extract log_dir and filename from imagePath
+    // imagePath is like "default/preds/000.jpg"
+    // We need log_dir="default" and filename="preds/000.jpg"
+    const pathParts = imagePath.split('/');
+    if (pathParts.length >= 2) {
+        const logDir = pathParts[0]; // e.g., "default"
+        const filename = pathParts.slice(1).join('/'); // e.g., "preds/000.jpg"
+        // Use the /results endpoint which has no-cache headers
+        // Add cache-busting timestamp to force browser to reload image
+        const timestamp = new Date().getTime();
+        return `${apiBase}/results/${logDir}/image/${filename}?t=${timestamp}`;
+    }
+    
+    // Fallback to old method if path format is unexpected
     let relativePath = imagePath.replace(outputDir, '');
     if (relativePath.startsWith('/')) {
         relativePath = relativePath.substring(1);
     }
-    const apiBase = getApiUrl().replace('/evaluate', '');
-    return `${apiBase}/outputs/${relativePath}`;
+    const timestamp = new Date().getTime();
+    return `${apiBase}/outputs/${relativePath}?t=${timestamp}`;
 }
 
 // Download results as zip

@@ -5,6 +5,7 @@ import faiss
 from pathlib import Path
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import CustomDataset
 from startup import get_model_cache, get_lightglue_models
 import vpr_models
@@ -17,8 +18,30 @@ def get_device(device_str: str) -> torch.device:
     return torch.device(device_str)
 
 
-def run_lightglue_evaluation(query_paths, database_paths, device, num_preds):
-    """Run LightGlue-only evaluation
+def _process_single_match(args):
+    """Helper function to process a single query-database image pair"""
+    extractor, matcher, device, query_path, db_path, db_idx, query_idx = args
+    from light_glue.run import light_glue_checker
+    
+    try:
+        matches_result = light_glue_checker(
+            extractor, matcher, device, query_path, db_path, score_threshold=0.85
+        )
+        num_matches = len(matches_result["matches"])
+        return (num_matches, db_idx, None)
+    except Exception as e:
+        return (0, db_idx, f"Query {query_idx}, DB {db_idx}: LightGlue check failed - {e}")
+
+
+def run_lightglue_evaluation(query_paths, database_paths, device, num_preds, max_workers=None):
+    """Run LightGlue-only evaluation with parallel processing
+    
+    Args:
+        query_paths: List of query image paths
+        database_paths: List of database image paths
+        device: torch.device to use
+        num_preds: Number of top predictions to return
+        max_workers: Maximum number of parallel workers (None = auto-detect)
     
     Returns:
         predictions: np.array of shape [num_queries x num_preds]
@@ -26,31 +49,51 @@ def run_lightglue_evaluation(query_paths, database_paths, device, num_preds):
     """
     from light_glue.lightglue.lightglue import LightGlue
     from light_glue.lightglue.superpoint import SuperPoint
-    from light_glue.run import light_glue_checker
     
     extractor, matcher = get_lightglue_models()
     if extractor is None or matcher is None:
         extractor = SuperPoint(max_num_keypoints=256).eval().to(device)
         matcher = LightGlue(features='superpoint').eval().to(device)
     
+    # Set max_workers based on device and available resources
+    if max_workers is None:
+        if device.type == "cuda":
+            # For CUDA, use more workers since GPU can handle parallel requests
+            max_workers = min(16, len(database_paths))
+        else:
+            # For CPU, use number of CPU cores
+            import os
+            max_workers = min(os.cpu_count() or 4, len(database_paths))
+    
     num_queries = len(query_paths)
     predictions = np.zeros((num_queries, num_preds), dtype=np.int64)
     match_counts = np.zeros((num_queries, num_preds), dtype=np.int32)
     
-    print("Matching queries with database using LightGlue only...")
+    print(f"Matching queries with database using LightGlue only (parallel processing with {max_workers} workers)...")
+    
     for query_idx, query_path in enumerate(tqdm(query_paths, desc="LightGlue matching")):
         query_match_counts = []
-        for db_idx, db_path in enumerate(database_paths):
-            try:
-                matches_result = light_glue_checker(
-                    extractor, matcher, device, query_path, db_path, score_threshold=0.85
-                )
-                num_matches = len(matches_result["matches"])
-                query_match_counts.append((num_matches, db_idx))
-            except Exception as e:
-                print(f"Query {query_idx}, DB {db_idx}: LightGlue check failed - {e}")
-                query_match_counts.append((0, db_idx))
         
+        # Prepare arguments for parallel processing
+        match_args = [
+            (extractor, matcher, device, query_path, db_path, db_idx, query_idx)
+            for db_idx, db_path in enumerate(database_paths)
+        ]
+        
+        # Process all database images for this query in parallel
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_db = {
+                executor.submit(_process_single_match, args): args[5]  # db_idx
+                for args in match_args
+            }
+            
+            for future in as_completed(future_to_db):
+                num_matches, db_idx, error_msg = future.result()
+                if error_msg:
+                    print(error_msg)
+                query_match_counts.append((num_matches, db_idx))
+        
+        # Sort by match count and get top predictions
         query_match_counts.sort(reverse=True, key=lambda x: x[0])
         top_matches = query_match_counts[:num_preds]
         predictions[query_idx] = [db_idx for _, db_idx in top_matches]

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: image-similarity-backend
+spec:
+  replicas: 3  # Number of backend pods - adjust based on your needs
+  selector:
+    matchLabels:
+      app: image-similarity-backend
+  template:
+    metadata:
+      labels:
+        app: image-similarity-backend
+    spec:
+      containers:
+      - name: backend
+        image: image-similarity-backend:latest  # Update with your image registry
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8040
+          name: http
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: 1  # Request 1 GPU per pod (if using GPU nodes)
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+            nvidia.com/gpu: 1  # Limit to 1 GPU per pod
+        livenessProbe:
+          httpGet:
+            path: /docs
+            port: 8040
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /docs
+            port: 8040
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: outputs
+          mountPath: /app/outputs
+      volumes:
+      - name: outputs
+        emptyDir: {}  # Use persistent volume for production
+      # Uncomment below if you need GPU nodes only
+      # nodeSelector:
+      #   accelerator: nvidia-tesla-k80  # Adjust to your GPU node label
+      # tolerations:
+      # - key: nvidia.com/gpu
+      #   operator: Exists
+      #   effect: NoSchedule
+

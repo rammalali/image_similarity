@@ -119,6 +119,8 @@ header h1 {
     overflow-x: hidden;
     padding: 5px;
     border-radius: 8px;
+    position: relative;
+    z-index: 1;
 }
 
 .file-list::-webkit-scrollbar {

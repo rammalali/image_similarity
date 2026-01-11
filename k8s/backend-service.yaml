@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: image-similarity-backend
+spec:
+  type: ClusterIP  # Use LoadBalancer for external access, or NodePort
+  ports:
+  - port: 8040
+    targetPort: 8040
+    protocol: TCP
+    name: http
+  selector:
+    app: image-similarity-backend
+  sessionAffinity: None  # Set to ClientIP if you need sticky sessions
+

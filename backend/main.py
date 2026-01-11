@@ -17,6 +17,7 @@ import visualizations
 from utils import validate_and_set_defaults, CustomDataset, save_uploaded_files
 from startup import startup_event, get_model_cache, get_lightglue_models
 from evaluation import get_device, run_lightglue_evaluation, run_vpr_evaluation
+from distributed_evaluation import distribute_lightglue_evaluation
 
 app = FastAPI(title="VPR Methods Evaluation API")
 
@@ -132,9 +133,19 @@ async def evaluate_vpr(
         # Run evaluation
         device_obj = get_device(request_obj.device)
         if request_obj.use_lightglue_only:
-            predictions, match_counts = run_lightglue_evaluation(
-                query_paths, database_paths, device_obj, request_obj.num_preds_to_save
-            )
+            # Check if distributed mode is enabled
+            use_distributed = os.getenv("USE_DISTRIBUTED_EVAL", "false").lower() == "true"
+            if use_distributed and len(database_paths) > 50:
+                # Use distributed evaluation across multiple pods
+                predictions, match_counts = await distribute_lightglue_evaluation(
+                    query_paths, database_paths, request_obj.device, 
+                    request_obj.num_preds_to_save, use_distributed=True
+                )
+            else:
+                # Use local parallel processing
+                predictions, match_counts = run_lightglue_evaluation(
+                    query_paths, database_paths, device_obj, request_obj.num_preds_to_save
+                )
             distances = match_counts  # Store match counts in distances for compatibility
         else:
             predictions, distances = run_vpr_evaluation(test_ds, request_obj, device_obj)
@@ -219,11 +230,18 @@ app.mount("/outputs", StaticFiles(directory=str(outputs_path)), name="outputs")
 
 @app.get("/results/{log_dir}/image/{filename:path}")
 async def get_result_image(log_dir: str, filename: str):
-    """Serve result images"""
+    """Serve result images with no-cache headers to prevent browser caching"""
     image_path = outputs_path / log_dir / filename
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(str(image_path))
+    return FileResponse(
+        str(image_path),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
 
 
 @app.post("/results/{log_dir}/download")
